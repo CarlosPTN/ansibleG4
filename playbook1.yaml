@@ -1,0 +1,108 @@
+---
+- hosts: db 
+  become: true
+  tasks:
+  - name: Vérification de la connexion
+    ping:
+  
+  - name: "install updates using yum"
+    apt:
+      name: "*"
+      state: latest
+      update_cache: true  
+  
+  - name: "install python"
+    apt:
+      name: python-apt
+      state: latest
+      update_cache: true
+
+  - name: installation package serveur MySQL [mysql-server]
+    apt:
+      name: mysql-server
+      state: latest
+      update_cache: yes
+  
+  - name: Installation package python-mysqldb
+    apt:
+      name: python-mysqldb
+      state: latest
+
+  - name: "do a wget"
+    get_url: 
+      url: https://raw.githubusercontent.com/brichbourg/Multi-Tier-App-Demo/master/sql/create_db_table.sql
+      dest: /home/ubuntu/
+  
+  - name: Gestion du service mysql
+    service:
+      name: mysql
+      state: started
+      enabled: yes
+ 
+  - name: "Installing Python 2 PIP"
+    apt:
+      name: "python3-pip"
+      state: latest
+      update_cache: true
+ 
+  - name: "Install setup tools from Python"
+    apt:
+      name: python-setuptools
+      state: latest
+      update_cache: true
+  
+  - name: "Install Python depedencies"
+    pip:
+      name: virtualenv
+      executable: pip3
+ 
+  - name: "Install Python Packages"
+    pip:
+      name: pymysql
+      executable: pip3 #forced with pip3, we have by default python3.7
+
+  - name: Change the authentication plugin of MySQL root user to mysql_native_password
+    shell: mysql -u root -e 'UPDATE mysql.user SET plugin="mysql_native_password" WHERE user="root" AND host="localhost"'
+  
+  - name: Flush Privileges
+    shell: mysql -u root -e 'FLUSH PRIVILEGES'
+  
+  - name: Set MySQL root password
+    mysql_user:
+      login_host: 'localhost'
+      login_user: 'root'
+      login_password: ''
+      name: 'root'
+      password: 'stage'
+      state: present
+  
+  - name: run database
+    mysql_db:
+      name: appdemo
+      login_host: ubuntu
+      login_user: root
+      login_password: 'stage'
+      target: /var/lib/mysql/appdemo/create_db_table.sql
+      state: import
+
+  
+  - name: Set MySQL root Password
+    mysql_user:
+      login_host: 'localhost'
+      login_user: 'root'
+      login_password: 'stage'
+      name: "appdemo'@'%"
+      priv: "*.*:ALL"
+      state: present
+ 
+  - name: Looks in mysqld.conf and replaces 127.0.0.1 with * 
+    ansible.builtin.lineinfile:
+      path: /etc/mysql/mysql.conf.d/mysqld.cnf
+      regexp: 'bind-address = 127.0.0.1'
+      line: "bind-address	= *"
+  
+  - name: restart mysql
+    service:
+      name: mysql
+      state: restarted
+      enabled: yes

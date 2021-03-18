@@ -1,0 +1,152 @@
+---
+- hosts: webback
+  become: true
+  become_method: sudo
+  tasks:
+  - name: "connection verification"
+    ping: 
+  - name: update all packages
+    apt:
+      name: "*"
+      state: latest
+      update_cache: true
+  - name: "install or update git package"
+    apt:
+      name: "git"
+      state: latest
+      update_cache: true
+
+  - name: Create git archive from repo
+    git:
+      repo: https://github.com/brichbourg/Multi-Tier-App-Demo.git
+      dest: /home/ubuntu/Multi-Tier-App-Demo
+
+  - name: "Intall Apache"
+    apt:
+      name: apache2
+      state: latest
+      update_cache: true
+  
+  - name: "Installing Python 3 PIP"
+    apt:
+      name: "python3-pip"
+      state: latest
+      update_cache: true
+  - name: "Install setup tools from Python"
+    apt:
+      name: python-setuptools
+      # extra_args: --user
+      state: latest
+      update_cache: true
+ 
+  - name: "Install Python depedencies"
+    pip:
+      name: virtualenv
+      # extra_args: --user
+      executable: pip3 #forced with pip3, we have by default python3.7
+
+  - name: "Install Python Packages"
+    pip:
+      name: pymysql
+      # extra_args: --user
+      executable: pip3 #forced with pip3, we have by default python3.7
+  
+  - name: Disable appropriate apache2 modules
+    command: a2dismod mpm_event
+
+  - name: Enable appropriate apache2 modules
+    command: a2enmod mpm_prefork
+ 
+  - name: Enable appropriate apache2 modules
+    command: a2enmod  cgi
+
+  - name: Restart apache
+    ansible.builtin.service:
+      name: apache2
+      state: restarted
+  
+  - name: "do a wget from amazon bucket to a specified desteny folder"
+    get_url: 
+      url: https://s3.amazonaws.com/richbourg-s3/mtwa/web/000-default.conf
+      dest: /etc/apache2/sites-enabled/
+  
+  - name: "do a wget from amazon bucket to a specified desteny folder"
+    get_url: 
+      url: https://s3.amazonaws.com/richbourg-s3/mtwa/web/ports.conf
+      dest: /etc/apache2/
+
+  - name: Restart apache
+    service:
+      name: apache2
+      state: restarted
+      
+  
+  - name: Create a directory if it does not exist
+    ansible.builtin.file:
+      path: /etc/mtwa
+      state: directory
+      mode: '0755'   
+
+  - name: Create a directory if it does not exist
+    ansible.builtin.file:
+      path: /var/www/html/appdemo 
+      state: directory
+      mode: '0755' 
+
+  - name: Copy a new "mtwa.conf" file into place, backing up the original if it differs from the copied version
+    ansible.builtin.copy:
+      src: /home/ubuntu/Multi-Tier-App-Demo/mtwa.conf
+      dest: /etc/mtwa/
+      remote_src: yes  
+
+  - name: Copy a new "ntp.conf" file into place, backing up the original if it differs from the copied version
+    ansible.builtin.copy:
+      src: /home/ubuntu/Multi-Tier-App-Demo/html/
+      dest: /var/www/html/appdemo/
+      remote_src: yes 
+  
+  - name: Copy all files in scripts directory backing up the original if it differs from the copied version
+    ansible.builtin.copy:
+      src: /home/ubuntu/Multi-Tier-App-Demo/scripts/
+      dest: /var/www/html/appdemo/
+      remote_src: yes
+
+  - name: Looks in mtwa.conf and replaces "AppServerName = appserver.company.com" with AppServerName = 3.251.68.216
+    ansible.builtin.lineinfile:
+      path: /etc/mtwa/mtwa.conf
+      regexp: AppServerName = appserver.company.com
+      line: AppServerName = 3.251.68.216 
+
+  - name: Looks in mtwa.conf and replaces "DBServerName = dbserver.company.com" with DBServerName = 34.243.117.5
+    ansible.builtin.lineinfile:
+      path: /etc/mtwa/mtwa.conf
+      regexp: DBServerName = dbserver.company.com
+      line: DBServerName = 34.243.117.5
+
+  - name: Restart apache
+    service:
+      name: apache2
+      state: restarted
+    
+- hosts: backend
+  become: true
+  tasks:
+  - name: "Vérification de la connexion"
+    ping:
+
+  - name: "do a wget from amazon bucket to specified destiny folder"
+    get_url: 
+      url: https://s3.amazonaws.com/richbourg-s3/mtwa/app/ports.conf
+      dest: /etc/apache2/
+  
+  - name: "ddo a wget from amazon bucket to specified destiny folder"
+    get_url: 
+      url: https://s3.amazonaws.com/richbourg-s3/mtwa/app/000-default.conf
+      dest: /etc/apache2/sites-enabled/
+  
+  - name: Restart apache
+    service:
+      name: apache2
+      state: restarted
+
+
